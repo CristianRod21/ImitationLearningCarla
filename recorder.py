@@ -16,6 +16,7 @@ import time
 import numpy as np
 import cv2
 import pygame
+import csv
 IM_WIDTH = 640
 IM_HEIGHT = 480
 
@@ -32,10 +33,10 @@ import carla
 
 
 
-
 class CamaraManager:
     def __init__(self):
         self.frame = None
+        self.recording = False
 
     def update_frame(self, frame):
         self.frame = frame
@@ -51,16 +52,17 @@ class CamaraManager:
         pygame.display.update() 
         
 
-def process_img(data, display_surface, camaraManager, show_image=True):
-    i = np.array(data.raw_data)
-    i2 = i.reshape((IM_HEIGHT, IM_WIDTH, 4))
-    i3 = i2[:, :, :3]
-    frame = i3
+    def process_img(self, data, display_surface, camaraManager, show_image=True):
+        i = np.array(data.raw_data)
+        i2 = i.reshape((IM_HEIGHT, IM_WIDTH, 4))
+        i3 = i2[:, :, :3]
+        frame = i3
 
-    if show_image:
-        camaraManager.update_frame(frame)
-        camaraManager.render(display_surface)
-
+        if show_image:
+            camaraManager.update_frame(frame)
+            camaraManager.render(display_surface)
+    def get_frame(self):
+        return self.frame
 
 IM_WIDTH = 640
 IM_HEIGHT = 480
@@ -143,6 +145,12 @@ def main():
 
     image = CamaraManager()
     simulatorManager = SimulatorManager()
+    ps4 = PS4Controller()
+    ps4.init()
+
+    done = False
+    frame_id = 0
+
 
     try:
         
@@ -156,23 +164,79 @@ def main():
         vehicle, camera = simulatorManager.spawn_mycar()
 
         # Starts the sensor of the camera and process it
-        camera.listen(lambda data: process_img(data, display_surface, image))
+        camera.listen(lambda data: image.process_img(data, display_surface, image))
 
+        recordThread = threading.Thread(target=manage_recording, args=(image, ps4, done, frame_id))
+        recordThread.start()
+        #manage_recording(image.get_frame(), ps4.get_controls())
+        
         # Sets the PS4 controller
-        controller(controls, vehicle)
-        print('Exit')
+        controller(ps4, controls, vehicle)
 
     finally:
+        done = True
+        recordThread.join()
         print('destroying actors')
         simulatorManager.clear_actors()
         print('done.')
 
 
-def controller(controls, vehicle):
-    ps4 = PS4Controller()
-    ps4.init()
-    ps4.listen(vehicle, controls)
+def manage_recording(image, ps4, done, frame_id):
+    if not os.path.exists(DIRECTORY):
+        os.makedirs(DIRECTORY)
+    
+    store_filename =  DIRECTORY + '/'  + FILENAME
+    with open(store_filename, 'a') as data_file:
+        fieldnames= ['image_path','throttle','brake', 'steering', 'reverse']
+        writer = csv.DictWriter(data_file, fieldnames=fieldnames,lineterminator='\n')
+        writer.writeheader()
 
+    # recordManager = RecordManager()
+    while not done:
+        print(ps4.has_to_record)
+        if ps4.has_to_record:
+            current_controls = ps4.get_controls()
+            current_image = image.get_frame()
+            store_data(current_controls, current_image, frame_id)
+            
+            frame_id +=1
+
+DIRECTORY = 'data'
+FILENAME = 'data.csv'
+
+def store_data(current_controls, current_image, frame_id):
+    path_image = os.path.join(os.path.abspath(os.getcwd()), DIRECTORY, f'image_{str(frame_id).zfill(5)}.png')
+
+    store_filename =  DIRECTORY + '/'  + FILENAME
+
+    if os.path.exists(store_filename):
+        # TODO: Get the lastest number of the previous csv and change frame_id and the name of path image
+        pass
+
+    with open(store_filename, 'a') as data_file:
+        fieldnames= ['image_path','throttle','brake', 'steering', 'reverse']
+        writer = csv.DictWriter(data_file, fieldnames=fieldnames, lineterminator='\n')
+
+        current_controls.update({'image_path': path_image})
+        
+        writer.writerow(current_controls)
+
+    cv2.imwrite(path_image, current_image)
+
+
+
+def controller(ps4, controls, vehicle):
+    ps4.listen(vehicle, controls)
+    
+
+class RecordManager():
+    def __init__(self):
+        pass
+    
+    def record_data(self, control_information, image):
+        if image is not None:
+            print(control_information, image.shape)
+ 
 
 '''
     Adapted from https://gist.github.com/claymcleod/028386b860b75e4f5472
@@ -194,6 +258,13 @@ class PS4Controller(object):
         pygame.joystick.init()
         self.controller = pygame.joystick.Joystick(0)
         self.controller.init()
+        self.controls  = {}
+        self.has_to_record = False
+        self.stop_recording = False
+    
+    def get_controls(self):
+        return self.controls
+
 
     def listen(self, vehicle, controls):
         """Listen for events to happen"""
@@ -222,9 +293,17 @@ class PS4Controller(object):
                 elif event.type == pygame.JOYHATMOTION:
                     self.hat_data[event.hat] = event.value
 
+                if (self.button_data[1] == True):
+                    if self.has_to_record:
+                        #print('Stop recording')
+                        self.has_to_record = False
+                    else:
+                        # Recording
+                        #print('Start Recording')
+                        self.has_to_record = True
                 # TODO: Toggle reverse
                 if (self.button_data[2] == True):
-                    print('Triangle, reverse') 
+                    print('Square, reverse') 
                 # Reads R2, to increase throttle 
                 if (5 in self.axis_data):
                     if self.axis_data[5] < 0:
@@ -252,11 +331,14 @@ class PS4Controller(object):
                             controls['steering'] = self.axis_data[0]
                     else:
                         controls['steering'] = 0
-                
+
                 # Prints the commands sent to the vehicle
-                print(controls)
+                #print(controls)
+                self.controls = controls
                 # Apply the controls
                 vehicle.apply_control(carla.VehicleControl(throttle=controls['throttle'], steer=controls['steering'], brake=controls['brake']))
+
+
                 # Clears the dict 
                 controls = {'throttle':0, 'brake': 0, 'steering':0, 'reverse': 0}
 
