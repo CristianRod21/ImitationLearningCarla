@@ -191,14 +191,12 @@ def manage_recording(image, ps4, done, frame_id):
         writer = csv.DictWriter(data_file, fieldnames=fieldnames,lineterminator='\n')
         writer.writeheader()
 
-    # recordManager = RecordManager()
     while not done:
-        print(ps4.has_to_record)
         if ps4.has_to_record:
-            current_controls = ps4.get_controls()
-            current_image = image.get_frame()
-            store_data(current_controls, current_image, frame_id)
-            
+            if frame_id % 5 == 0:
+                current_controls = ps4.get_controls()
+                current_image = image.get_frame()
+                store_data(current_controls, current_image, frame_id)         
             frame_id +=1
 
 DIRECTORY = 'data'
@@ -294,16 +292,11 @@ class PS4Controller(object):
                     self.hat_data[event.hat] = event.value
 
                 if (self.button_data[1] == True):
-                    if self.has_to_record:
-                        #print('Stop recording')
-                        self.has_to_record = False
-                    else:
-                        # Recording
-                        #print('Start Recording')
-                        self.has_to_record = True
+                    print('Circle, start recording')
+                    self.has_to_record = True
                 # TODO: Toggle reverse
                 if (self.button_data[2] == True):
-                    print('Square, reverse') 
+                    print('Square, stop recording') 
                 # Reads R2, to increase throttle 
                 if (5 in self.axis_data):
                     if self.axis_data[5] < 0:
