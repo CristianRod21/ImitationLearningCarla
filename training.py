@@ -7,7 +7,7 @@ import cv2
 import pandas as pd
 import numpy as np
 import torch.optim as optim
-
+import time
 
 class DrivingDataset(Dataset):
     ''' Dataloader for the dataset '''
@@ -74,14 +74,13 @@ def train(epochs=1, dataset=None):
 
     # Iterates n epochs
     for epoch in range(epochs):
-        
+        start = time.time()
         # Iterates through the dataset
         for batch_idx, data in enumerate(dataset):
             # Gets the image data and the 3 first commands
-            image, labels = data['image'], data['commands'][:, :3]
-            
-            # Extra dimension. ToDo: Batch size
-            image = image[None, :, :, :,]
+            image, labels = data['image'], data['commands'][ :, :, :3]
+            # From [batch, 1, 4] to [batch, 4]
+            labels = labels.reshape(labels.shape[0], labels.shape[2])
 
             
             optimizer.zero_grad()
@@ -89,22 +88,27 @@ def train(epochs=1, dataset=None):
             # Forward pass
             outputs = model(image.float().to(device))
 
+
             # Calculates loss and backpropagate
             loss = criterion(outputs, labels.float().to(device))
             loss.backward()
             optimizer.step()
-
-            if batch_idx % 10 == 0:
+            
+            if batch_idx % 100 == 0:
                 loss_data = loss.item()
                 train_losses.append(loss_data)
                 print(
                     'Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.
                     format(epoch, batch_idx * len(data), len(dataset),
                         100. * batch_idx / len(dataset), loss_data))
+        print(f'Epoch took {(time.time() - start )/60}  minutes')
+
             
 csv = 'C:\\Users\\cjrs2\\OneDrive\\Escritorio\\Ml\\ImitationLearningCarla\\data\\data.csv'
-batch_size = 64
+batch_size = 4
 driving_dataset = DrivingDataset(csv_file=csv, transform=transforms.Compose( [Normalize() ,ToTensor()]))
 
-train(epochs=1, dataset=driving_dataset)
+dataloader = DataLoader(driving_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
+
+train(epochs=1, dataset=dataloader)
 
