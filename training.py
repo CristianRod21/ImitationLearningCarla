@@ -10,6 +10,7 @@ import torch.optim as optim
 
 
 class DrivingDataset(Dataset):
+    ''' Dataloader for the dataset '''
     def __init__(self, csv_file, transform=None):
         self.data_frame = pd.read_csv(csv_file)
         self.transform = transform
@@ -25,7 +26,7 @@ class DrivingDataset(Dataset):
         image = io.imread(img_name)
         # Reads throttle, brake, steering, reverse
         commands = self.data_frame.iloc[idx, 1:]
-        commands = np.array([commands]).astype('float')
+        commands = np.array([commands]).astype('double')
         sample = {'image': image, 'commands': commands}
         if self.transform:
             sample = self.transform(sample)
@@ -47,7 +48,6 @@ class ToTensor(object):
 
 class Normalize(object):
     """Convert ndarrays in sample to Tensors."""
-
     def __call__(self, sample):
         image, commands = sample['image'], sample['commands']
 
@@ -55,51 +55,55 @@ class Normalize(object):
         return {'image': image,
                 'commands': commands}
 
-
+'''Training loop'''
 def train(epochs=1, dataset=None):
     if dataset is None:
         print('Missing dataset argument')
-        return 0
+        return 0   
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    # Creates the resnet
     model = models.resnet50(pretrained=True)
-    # Steering, Throttle, Brake 
+    # Steering, Throttle, Brake, reverse
     model.fc = nn.Linear(2048, 3)
-    
+    model.to(device)
+    # Defines optimizer and loss criteria
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
+    train_losses = []
 
+    # Iterates n epochs
     for epoch in range(epochs):
-        running_loss= 0.0
+        
+        # Iterates through the dataset
+        for batch_idx, data in enumerate(dataset):
+            # Gets the image data and the 3 first commands
+            image, labels = data['image'], data['commands'][:, :3]
+            
+            # Extra dimension. ToDo: Batch size
+            image = image[None, :, :, :,]
 
-        for i, data in enumerate(dataset):
-            image, labels = data['image'], data['commands']
-
-
+            
             optimizer.zero_grad()
+            
+            # Forward pass
+            outputs = model(image.float().to(device))
 
-            outputs = model(image)
-
-            loss = criterion(outputs, labels)
+            # Calculates loss and backpropagate
+            loss = criterion(outputs, labels.float().to(device))
             loss.backward()
             optimizer.step()
 
-            running_loss += loss.item()
-
-            running_loss += loss.item()
-            if i % 10 == 0:    # print every 10 mini-batches
-                print('[%d, %5d] loss: %.3f' %
-                    (epoch + 1, i + 1, running_loss / 10))
-                running_loss = 0.0
+            if batch_idx % 10 == 0:
+                loss_data = loss.item()
+                train_losses.append(loss_data)
+                print(
+                    'Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.
+                    format(epoch, batch_idx * len(data), len(dataset),
+                        100. * batch_idx / len(dataset), loss_data))
             
-    
-    images = torch.randn(1, 3, 224, 224)
-    preds= model(images)
-    print(preds)
-
-    #loss = criterion(pr   eds, labels)
-
 csv = 'C:\\Users\\cjrs2\\OneDrive\\Escritorio\\Ml\\ImitationLearningCarla\\data\\data.csv'
-batch_size = 32
+batch_size = 64
 driving_dataset = DrivingDataset(csv_file=csv, transform=transforms.Compose( [Normalize() ,ToTensor()]))
 
 train(epochs=1, dataset=driving_dataset)
