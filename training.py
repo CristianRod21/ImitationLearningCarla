@@ -56,7 +56,7 @@ class Normalize(object):
                 'commands': commands}
 
 '''Training loop'''
-def train(epochs=1, dataset=None):
+def train(epochs=1, dataset=None, model_save_path=None):
     if dataset is None:
         print('Missing dataset argument')
         return 0   
@@ -71,6 +71,7 @@ def train(epochs=1, dataset=None):
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     train_losses = []
+
 
     # Iterates n epochs
     for epoch in range(epochs):
@@ -102,13 +103,22 @@ def train(epochs=1, dataset=None):
                     format(epoch, batch_idx * len(data), len(dataset),
                         100. * batch_idx / len(dataset), loss_data))
         print(f'Epoch took {(time.time() - start )/60}  minutes')
+        if epoch % 10 == 0:
+            # Every 10th epochs
+            print('Saving model')
+            # Save the model
+            torch.save(model.state_dict, model_save_path + f'driving_{epoch}.weights')
+        
 
-            
+
+
+
+model_save_path = 'C:\\Users\\cjrs2\\OneDrive\\Escritorio\\Ml\\ImitationLearningCarla\\'            
 csv = 'C:\\Users\\cjrs2\\OneDrive\\Escritorio\\Ml\\ImitationLearningCarla\\data\\data.csv'
 batch_size = 4
 driving_dataset = DrivingDataset(csv_file=csv, transform=transforms.Compose( [Normalize() ,ToTensor()]))
 
 dataloader = DataLoader(driving_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
 
-train(epochs=1, dataset=dataloader)
+train(epochs=10, dataset=dataloader,model_save_path=model_save_path)
 
