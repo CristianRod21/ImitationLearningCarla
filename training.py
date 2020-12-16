@@ -83,7 +83,6 @@ def train(epochs=1, dataset=None, model_save_path=None):
             # From [batch, 1, 4] to [batch, 4]
             labels = labels.reshape(labels.shape[0], labels.shape[2])
 
-            
             optimizer.zero_grad()
             
             # Forward pass
@@ -110,15 +109,19 @@ def train(epochs=1, dataset=None, model_save_path=None):
             torch.save(model.state_dict, model_save_path + f'driving_{epoch}.weights')
         
 
+def main():
+    # Path where the weights are saved
+    model_save_path = 'C:\\Users\\cjrs2\\OneDrive\\Escritorio\\Ml\\ImitationLearningCarla\\'            
+    # Path to the csv with the annotations
+    csv = 'C:\\Users\\cjrs2\\OneDrive\\Escritorio\\Ml\\ImitationLearningCarla\\data\\data.csv'
 
+    # Dataset set up
+    driving_dataset = DrivingDataset(csv_file=csv, transform=transforms.Compose( [Normalize() ,ToTensor()]))
+    batch_size = 4
+    dataloader = DataLoader(driving_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
 
+    # Lets train :)
+    train(epochs=11, dataset=dataloader,model_save_path=model_save_path)
 
-model_save_path = 'C:\\Users\\cjrs2\\OneDrive\\Escritorio\\Ml\\ImitationLearningCarla\\'            
-csv = 'C:\\Users\\cjrs2\\OneDrive\\Escritorio\\Ml\\ImitationLearningCarla\\data\\data.csv'
-batch_size = 4
-driving_dataset = DrivingDataset(csv_file=csv, transform=transforms.Compose( [Normalize() ,ToTensor()]))
-
-dataloader = DataLoader(driving_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
-
-train(epochs=10, dataset=dataloader,model_save_path=model_save_path)
-
+if __name__ == "__main__":
+    main()
