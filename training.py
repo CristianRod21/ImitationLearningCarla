@@ -106,7 +106,7 @@ def train(epochs=1, dataset=None, model_save_path=None):
             # Every 10th epochs
             print('Saving model')
             # Save the model
-            torch.save(model.state_dict, model_save_path + f'driving_{epoch}.weights')
+            torch.save(model.state_dict(), model_save_path + f'driving_{epoch}.weights')
         
 
 def main():
@@ -117,7 +117,7 @@ def main():
 
     # Dataset set up
     driving_dataset = DrivingDataset(csv_file=csv, transform=transforms.Compose( [Normalize() ,ToTensor()]))
-    batch_size = 4
+    batch_size = 5
     dataloader = DataLoader(driving_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
 
     # Lets train :)
